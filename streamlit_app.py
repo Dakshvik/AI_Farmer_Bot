@@ -98,7 +98,6 @@ def get_bot_response(user_input: str, kb_items: List[Tuple[str, str, str]]) -> s
     if not ui or not kb_items:
         return "" # Return empty if no input or no KB
 
-    # This logic remains the same: find the best factual answer.
     cat_keywords = {
         "fertilizer": ["fertilizer", "manure", "nutrient"], "pests": ["pest", "insect", "worm", "spray"],
         "irrigation": ["irrigation", "water", "watering"], "weather": ["weather", "rain", "forecast"],
@@ -170,14 +169,16 @@ def main():
             "using an AI model."
         )
 
-        # --- THIS IS THE UPDATED SECTION FOR EXAMPLE QUESTIONS ---
         st.markdown("---")
         st.subheader("Things You Can Ask:")
         st.info("What is the best fertilizer for rice?")
         st.info("How do I control pests in tomato plants?")
         st.info("What is the market price for cotton?")
         st.info("How can I test my soil's pH level?")
-        # --- END OF UPDATED SECTION ---
+        
+        # This is the helper text you requested
+        st.markdown("---")
+        st.caption("💡 In case of any errors, please refresh the page.")
 
     kb, kb_items = load_any_kb(), flatten_kb(load_any_kb())
 
@@ -221,6 +222,5 @@ def main():
 
         if enable_voice:
             speak_text_autoplay(final_response)
-
 if __name__ == "__main__":
     main()
