@@ -1,0 +1,7 @@
+streamlit>=1.36.0
+SpeechRecognition==3.10.0
+gTTS>=2.5.0
+soundfile>=0.12.1
+numpy>=1.24.0
+audio-recorder-streamlit>=0.0.8
+huggingface_hub>=0.20.0

@@ -1,0 +1,38 @@
+{
+  "fertilizer": [
+    { "query": "rice", "answer": "Apply urea at 3 weeks after transplanting and supplement with DAP. Add potash at flowering stage for higher yield." },
+    { "query": "wheat", "answer": "Use nitrogen-rich fertilizer like urea during crown root initiation. Add potash for better grain filling." },
+    { "query": "cotton", "answer": "Apply NPK (60:30:30) in split doses. Use farmyard manure before sowing for soil fertility." },
+    { "query": "soil fertility", "answer": "Add organic compost, farmyard manure, or green manure crops like cowpea to enrich soil naturally." }
+  ],
+  "pests": [
+    { "query": "tomato", "answer": "Spray neem oil every 10–12 days. Remove and burn infected leaves to stop spread." },
+    { "query": "cotton", "answer": "Use pheromone traps for bollworms. Apply neem bio-pesticide instead of harmful chemicals." },
+    { "query": "paddy", "answer": "For brown planthopper, avoid overuse of nitrogen. Use light traps and spray neem extract." },
+    { "query": "safe", "answer": "Adopt Integrated Pest Management (IPM) with natural enemies, bio-pesticides, and crop rotation." }
+  ],
+  "irrigation": [
+    { "query": "tomato", "answer": "Water every 2–3 days in summer, once in 4–5 days in winter. Avoid waterlogging." },
+    { "query": "paddy", "answer": "Maintain 2–3 cm standing water during vegetative growth. Drain water 10–15 days before harvest." },
+    { "query": "wheat", "answer": "Irrigate at crown root initiation, tillering, flowering, and grain filling stages." },
+    { "query": "sugarcane", "answer": "Follow furrow irrigation every 7–10 days in summer. Drip irrigation saves water." }
+  ],
+  "weather": [
+    { "query": "groundnut", "answer": "Sow only if rainfall is expected. Groundnut needs moist but not waterlogged soil." },
+    { "query": "rain", "answer": "Heavy rain can cause root rot. Ensure proper drainage to protect crops." },
+    { "query": "drought", "answer": "Use drought-tolerant crops like millets. Practice mulching to retain soil moisture." },
+    { "query": "frost", "answer": "Cover sensitive crops with straw or plastic sheets during night to prevent frost damage." }
+  ],
+  "soil": [
+    { "query": "soil testing", "answer": "Test soil every 2–3 years to know pH and nutrient levels. Follow lab recommendations." },
+    { "query": "acidic soil", "answer": "Apply lime to neutralize acidity. Grow crops like potato, tea, and pineapple that tolerate acidity." },
+    { "query": "alkaline soil", "answer": "Use gypsum and organic matter to improve structure. Salt-tolerant crops like barley can be grown." },
+    { "query": "salinity", "answer": "Use salt-tolerant varieties and apply organic manure. Leach excess salts with good irrigation." }
+  ],
+  "market": [
+    { "query": "maize", "answer": "Current maize price is approx. ₹18–20 per kg (demo). Check nearest mandi for updates." },
+    { "query": "vegetables", "answer": "Sell directly to Farmer Producer Organizations (FPOs) for better price." },
+    { "query": "pulses", "answer": "Government offers MSP (Minimum Support Price). Contact local procurement centers." },
+    { "query": "online", "answer": "Use digital platforms like eNAM and Kisan Mandi apps to connect with buyers." }
+  ]
+}
