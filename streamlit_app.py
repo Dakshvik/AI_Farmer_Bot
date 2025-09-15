@@ -7,40 +7,39 @@ from io import BytesIO
 import base64
 from typing import Dict, Any, List, Tuple
 
+# Import the Hugging Face client
+from huggingface_hub import InferenceClient
+
+# This component is optional but provides a better UX for audio recording
 try:
     from audio_recorder_streamlit import audio_recorder
     _audrec_available = True
 except ImportError:
     _audrec_available = False
 
-
 # ----------------------------
-# Load Knowledge Base
+# Knowledge Base (KB) Functions
 # ----------------------------
-def load_kb(path: str) -> Dict[str, Any]:
-    with open(path, "r", encoding="utf-8") as f:
-        return json.load(f)
-
+@st.cache_data(show_spinner="Loading knowledge base...")
 def load_any_kb() -> Dict[str, Any]:
+    """Loads and merges knowledge base files."""
     kb: Dict[str, Any] = {}
     candidates = ["dataset.json", "diseases.json"]
     for name in candidates:
         if os.path.exists(name):
             try:
-                data = load_kb(name)
+                with open(name, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                # Merge data: new keys are added, existing ones are ignored
                 for k, v in data.items():
                     if k not in kb:
                         kb[k] = v
             except Exception as e:
-                st.error(f"Error loading {name}: {e}")
+                st.error(f"Error loading or parsing {name}: {e}")
     return kb
 
-
-# ----------------------------
-# KB Utilities
-# ----------------------------
 def flatten_kb(kb: Dict[str, Any]) -> List[Tuple[str, str, str]]:
-    """Return a list of (category, query, answer) from the KB."""
+    """Converts the nested KB dictionary into a flat list of (category, query, answer)."""
     items: List[Tuple[str, str, str]] = []
     for category, entries in kb.items():
         if isinstance(entries, list):
@@ -51,206 +50,164 @@ def flatten_kb(kb: Dict[str, Any]) -> List[Tuple[str, str, str]]:
                     items.append((category, q, a))
     return items
 
-
 # ----------------------------
-# Text-to-Speech
+# Voice and Speech Functions
 # ----------------------------
-def speak_text(text: str):
+def speak_text_autoplay(text: str):
+    """Generates speech and plays it automatically in the browser using a hidden audio element."""
     try:
         tts = gTTS(text=text, lang="en")
         fp = BytesIO()
         tts.write_to_fp(fp)
         fp.seek(0)
-
-        # Encode audio to base64
+        
         b64 = base64.b64encode(fp.read()).decode()
+        # HTML for an audio player that autoplays and is hidden
         md = f"""
-            <audio autoplay controls>
+            <audio autoplay style="display:none;">
                 <source src="data:audio/mp3;base64,{b64}" type="audio/mp3">
             </audio>
-        """
+            """
         st.markdown(md, unsafe_allow_html=True)
     except Exception as e:
-        st.error(f"TTS error: {e}")
+        st.error(f"An error occurred with text-to-speech: {e}")
 
-
-# ----------------------------
-# Speech-to-Text
-# ----------------------------
-def recognize_speech_from_audio(audio_bytes) -> str:
+def recognize_speech_from_audio(audio_bytes: bytes) -> str:
+    """Transcribes audio bytes into text using Google's speech recognition."""
     recognizer = sr.Recognizer()
     try:
         with sr.AudioFile(BytesIO(audio_bytes)) as source:
             audio_data = recognizer.record(source)
-            text = recognizer.recognize_google(audio_data)
-            return text
+        return recognizer.recognize_google(audio_data)
+    except sr.UnknownValueError:
+        st.warning("Could not understand the audio. Please try again.")
+        return ""
+    except sr.RequestError as e:
+        st.error(f"Speech recognition service error; {e}")
+        return ""
     except Exception as e:
-        st.error(f"Speech recognition error: {e}")
+        st.error(f"Audio processing error: {e}")
         return ""
 
-
 # ----------------------------
-# Get Bot Response
+# Bot Response Logic
 # ----------------------------
-def get_bot_response(user_input: str, kb: Dict[str, Any]) -> str:
-    """Heuristic search over KB to find the best matching answer.
-
-    Strategy:
-    - If the input mentions a category or related keywords, prefer entries from that category.
-    - Prefer entries whose query text appears in the input (substring match).
-    - Fallback to any keyword overlap between input and entry query.
-    - Provide a friendly fallback with suggestions if nothing matches well.
-    """
+def get_bot_response(user_input: str, kb_items: List[Tuple[str, str, str]]) -> str:
+    """Finds the best matching factual answer from the KB using a scoring heuristic."""
     ui = user_input.lower().strip()
-    if not ui:
-        return "Please type a farming question to get advice."
+    if not ui or not kb_items:
+        return "" # Return empty if no input or no KB
 
-    items = flatten_kb(kb)
-    if not items:
-        return "Knowledge base is empty. Please add entries to dataset.json."
-
-    # Simple category keyword map to improve intent detection
+    # This logic remains the same: find the best factual answer.
     cat_keywords = {
-        "fertilizer": ["fertilizer", "fertiliser", "urea", "dap", "npk", "manure", "nutrient"],
-        "pests": ["pest", "insect", "worm", "bollworm", "ipm", "spray", "neem"],
-        "irrigation": ["irrigation", "water", "watering", "drip", "furrow"],
-        "weather": ["weather", "rain", "drought", "frost", "forecast", "temperature"],
-        "soil": ["soil", "ph", "acidic", "alkaline", "salinity", "testing", "gypsum", "lime"],
-        "market": ["price", "market", "msp", "sell", "mandi", "buyer", "enam"],
+        "fertilizer": ["fertilizer", "manure", "nutrient"], "pests": ["pest", "insect", "worm", "spray"],
+        "irrigation": ["irrigation", "water", "watering"], "weather": ["weather", "rain", "forecast"],
+        "soil": ["soil", "ph", "testing"], "market": ["price", "market", "msp", "sell"],
     }
-
-    def has_any(hay: str, needles: List[str]) -> bool:
-        return any(n in hay for n in needles)
-
-    # Score items
     best_score = 0.0
     best_answer = None
-    for category, query, answer in items:
+    for category, query, answer in kb_items:
         score = 0.0
-
-        # Category mention boosts score
-        if category.lower() in ui or has_any(ui, cat_keywords.get(category.lower(), [])):
-            score += 1.0
-
         ql = query.lower()
-
-        # Direct substring match gets a strong boost
-        if ql in ui or any(word in ui for word in ql.split() if len(word) > 2):
-            score += 2.0
-
-        # Light overlap: any UI token in query
-        ui_tokens = [t for t in ui.replace("/", " ").replace(",", " ").split() if len(t) > 2]
-        if any(t in ql for t in ui_tokens):
-            score += 0.5
-
+        if any(keyword in ui for keyword in cat_keywords.get(category, [])): score += 1.0
+        if ql in ui: score += 2.0
+        ui_tokens, query_tokens = set(ui.split()), set(ql.split())
+        overlap = len(ui_tokens.intersection(query_tokens))
+        score += 0.5 * overlap
         if score > best_score:
-            best_score = score
-            best_answer = answer
+            best_score, best_answer = score, answer
+            
+    return best_answer if best_score >= 1.0 else ""
 
-    if best_answer and best_score >= 1.0:
-        return best_answer
+def get_hf_response(user_input: str, kb_answer: str) -> str:
+    """Uses a Hugging Face model to make the KB answer sound more natural."""
+    fallback_message = "I'm sorry, I couldn't find a specific answer for that. Please try rephrasing your question."
+    if not kb_answer:
+        return fallback_message
 
-    # Friendly fallback with examples derived from KB categories
-    tips = (
-        "Try including the crop and topic. For example: "
-        "'fertilizer for rice', 'pest control in tomato', 'irrigation for wheat', 'soil testing advice'."
-    )
-    return f"I don't have enough information to answer that precisely. {tips}"
+    if "HF_TOKEN" not in st.secrets:
+        st.error("Hugging Face API token not found. Please add it to your Streamlit secrets.")
+        return kb_answer # Fallback to the basic answer
 
+    try:
+        client = InferenceClient(token=st.secrets["HF_TOKEN"])
+        prompt = f"""
+        You are a friendly farming assistant. Your task is to answer the user's question in a conversational and helpful way, based on the provided information.
+        Make the answer easy to understand and keep it concise (2-3 sentences).
 
-# ----------------------------
-# Streamlit UI
-# ----------------------------
-st.set_page_config(page_title="Farming Assistant", layout="wide")
+        User's Question: "{user_input}"
+        Information to Use for the Answer: "{kb_answer}"
 
-st.sidebar.title("Settings")
-enable_voice = st.sidebar.checkbox("Enable Voice", value=True)
-
-
-st.sidebar.markdown("---")
-st.sidebar.title("About")
-st.sidebar.write("""
-Ask me about:
-- Fertilizer guidance  
-- Pest and disease management  
-- Irrigation schedules  
-- Soil health tips  
-- Weather-based advice  
-- Market prices  
-""")
-
-
-st.title("🌱 Farming Assistant")
-st.caption("Your personal farming assistant")
-
-# Load KB
-kb = load_any_kb()
-
-# Conversation State
-if "conversation" not in st.session_state:
-    st.session_state.conversation = []
-
-# Intro message
-if not st.session_state.conversation:
-    st.session_state.conversation.append({"role": "bot", "text": "Hello! I'm your farming assistant. How can I help you today?"})
-
-# Conversation will be rendered after handling inputs
-
+        Your Friendly Answer:
+        """
+        response = client.chat_completion(
+            messages=[{"role": "user", "content": prompt}],
+            model="HuggingFaceH4/zephyr-7b-beta",
+            max_tokens=200,
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        st.warning(f"Could not connect to Hugging Face, providing the standard answer. Error: {e}")
+        return kb_answer
 
 # ----------------------------
-# Input Section
+# Main Streamlit App UI
 # ----------------------------
-col1, col2, col3 = st.columns([6, 1, 1])
+def main():
+    st.set_page_config(page_title="Farming Assistant", page_icon="🌱", layout="centered")
 
-with col1:
-    user_input = st.text_input("Type your farming question here...", key="user_text_input")
+    st.title("🌱 Farming Assistant")
+    st.caption("Your AI-powered guide for farming questions.")
 
-with col2:
-    audio_bytes = None
-    if _audrec_available:
-        # Keep a stable key so the mic doesn't disappear on reruns
-        audio_bytes = audio_recorder(key="input_mic")
-    else:
-        st.button("🎤", disabled=True, help="Install audio_recorder_streamlit for mic input")
+    with st.sidebar:
+        st.header("Settings")
+        enable_voice = st.checkbox("Enable Voice Output", value=True)
+        st.markdown("---")
+        st.header("About")
+        st.write("This assistant answers questions on farming topics using an AI model.")
 
-with col3:
-    send_clicked = st.button("Send", key="send_btn")
+    kb, kb_items = load_any_kb(), flatten_kb(load_any_kb())
 
+    if "messages" not in st.session_state:
+        st.session_state.messages = [{"role": "assistant", "content": "Hello! How can I help you with your farming today?"}]
 
-# Handle text input
-if send_clicked and user_input:
-    st.session_state.conversation.append({"role": "user", "text": user_input})
-    response = get_bot_response(user_input, kb)
-    st.session_state.conversation.append({"role": "bot", "text": response})
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
 
-    # Speak response
-    if enable_voice:
-        speak_text(response)
+    prompt = None
+    input_col, mic_col = st.columns([4, 1])
 
+    with mic_col:
+        st.write("")
+        st.write("")
+        if _audrec_available:
+            audio_bytes = audio_recorder(text="🎤", icon_size="2xl", key="audio_recorder")
+            if audio_bytes:
+                with st.spinner("Transcribing your voice..."):
+                    prompt = recognize_speech_from_audio(audio_bytes)
+        else:
+            st.info("Install `audio-recorder-streamlit` for voice input.")
 
-# Handle mic input inline (beside the text input)
-if _audrec_available and audio_bytes:
-    st.audio(audio_bytes, format="audio/wav")
-    text_from_speech = recognize_speech_from_audio(audio_bytes)
-    if text_from_speech:
-        st.session_state.conversation.append({"role": "user", "text": text_from_speech})
-        response = get_bot_response(text_from_speech, kb)
-        st.session_state.conversation.append({"role": "bot", "text": response})
+    with input_col:
+        if text_input := st.chat_input("Ask your farming question here..."):
+            prompt = text_input
 
-        # Speak response
-        if enable_voice:
-            speak_text(response)
-elif not _audrec_available:
-    st.caption("Voice input unavailable: install `audio_recorder_streamlit`.")
-
-# ----------------------------
-# Render conversation (clean chat layout)
-# ----------------------------
-for msg in st.session_state.conversation:
-    role = msg.get("role", "bot")
-    if role == "user":
+    if prompt:
+        st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
-            st.write(msg.get("text", ""))
-    else:
+            st.markdown(prompt)
+        
         with st.chat_message("assistant"):
-            st.write(msg.get("text", ""))
+            with st.spinner("AI is thinking..."):
+                basic_answer = get_bot_response(prompt, kb_items)
+                final_response = get_hf_response(prompt, basic_answer)
+            st.markdown(final_response)
+        
+        st.session_state.messages.append({"role": "assistant", "content": final_response})
+
+        if enable_voice:
+            speak_text_autoplay(final_response)
+
+if __name__ == "__main__":
+    main()
