@@ -163,8 +163,21 @@ def main():
         st.header("Settings")
         enable_voice = st.checkbox("Enable Voice Output", value=True)
         st.markdown("---")
+        
         st.header("About")
-        st.write("This assistant answers questions on farming topics using an AI model.")
+        st.write(
+            "This assistant answers questions on farming topics "
+            "using an AI model."
+        )
+
+        # --- THIS IS THE UPDATED SECTION FOR EXAMPLE QUESTIONS ---
+        st.markdown("---")
+        st.subheader("Things You Can Ask:")
+        st.info("What is the best fertilizer for rice?")
+        st.info("How do I control pests in tomato plants?")
+        st.info("What is the market price for cotton?")
+        st.info("How can I test my soil's pH level?")
+        # --- END OF UPDATED SECTION ---
 
     kb, kb_items = load_any_kb(), flatten_kb(load_any_kb())
 
